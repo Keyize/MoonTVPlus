@@ -98,7 +98,7 @@ export function WatchRoomProvider({ children }: WatchRoomProviderProps) {
 
     setToast({
       message: '房主已离开，播放状态已清除',
-      type: 'warning',
+      type: 'info',
       duration: 4000,
       onClose: () => setToast(null),
     });
