@@ -71,7 +71,6 @@ export interface ScriptSourceDescriptor {
 }
 
 const SCRIPT_SOURCE_PREFIX = 'script:';
-const SCRIPT_EPISODE_PREFIX = '__script_ep__';
 
 const DEFAULT_SCRIPT_TEMPLATE = `return {
   meta: {
@@ -752,30 +751,6 @@ export function parseScriptSourceValue(source: string) {
   };
 }
 
-export function encodeScriptEpisodePayload(payload: Record<string, any>) {
-  return `${SCRIPT_EPISODE_PREFIX}${Buffer.from(
-    JSON.stringify(payload),
-    'utf8'
-  ).toString('base64')}`;
-}
-
-export function decodeScriptEpisodePayload(value: string) {
-  if (!value.startsWith(SCRIPT_EPISODE_PREFIX)) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(
-      Buffer.from(
-        value.slice(SCRIPT_EPISODE_PREFIX.length),
-        'base64'
-      ).toString('utf8')
-    ) as Record<string, any>;
-  } catch {
-    return null;
-  }
-}
-
 export function normalizeScriptSources(result: any): ScriptSourceDescriptor[] {
   if (!Array.isArray(result)) {
     return [{ id: 'default', name: '默认源' }];
@@ -801,8 +776,10 @@ export function normalizeScriptSearchResults(input: {
     id: String(item.id),
     title: String(item.title || ''),
     poster: item.poster || '',
-    episodes: [],
-    episodes_titles: [],
+    episodes: Array.isArray(item.episodes) ? item.episodes : [],
+    episodes_titles: Array.isArray(item.episodes_titles)
+      ? item.episodes_titles
+      : [],
     source: buildScriptSourceValue(input.scriptKey, input.sourceId),
     source_name: `${input.scriptName} / ${input.sourceName}`,
     year: item.year || '',
@@ -839,9 +816,7 @@ export function normalizeScriptDetailResult(input: {
   const flattenedTitles: string[] = [];
 
   playbacks.forEach((playback: any) => {
-    const playbackSourceId = String(playback.sourceId || input.sourceId);
     const playbackSourceName = String(playback.sourceName || input.sourceName);
-    const lineId = String(playback.lineId || 'default');
     const lineName = String(playback.lineName || '默认线路');
     const titles = Array.isArray(playback.episodes_titles)
       ? playback.episodes_titles
@@ -858,17 +833,7 @@ export function normalizeScriptDetailResult(input: {
           ? String(episode.title)
           : String(titles[index] || `第${index + 1}集`);
 
-      flattenedEpisodes.push(
-        encodeScriptEpisodePayload({
-          script: input.scriptKey,
-          sourceId: playbackSourceId,
-          sourceName: playbackSourceName,
-          lineId,
-          lineName,
-          playUrl,
-          episodeIndex: index,
-        })
-      );
+      flattenedEpisodes.push(playUrl);
       flattenedTitles.push(`${playbackSourceName} / ${lineName} / ${episodeTitle}`);
     });
   });

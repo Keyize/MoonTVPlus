@@ -586,6 +586,16 @@ function PlayPageClient() {
     return { source };
   };
 
+  const isLazyDetailSource = (source?: string) => {
+    if (!source) return false;
+    return (
+      source === 'openlist' ||
+      source === 'emby' ||
+      source.startsWith('emby_') ||
+      source.startsWith('script:')
+    );
+  };
+
   // 搜索所需信息
   const [searchTitle] = useState(searchParams.get('stitle') || '');
   const [searchType] = useState(searchParams.get('stype') || '');
@@ -2106,8 +2116,8 @@ function PlayPageClient() {
       !detailData.episodes ||
       episodeIndex >= detailData.episodes.length
     ) {
-      // openlist 和 emby 源的剧集是懒加载的，如果 episodes 为空则跳过
-      if ((detailData?.source === 'openlist' || detailData?.source === 'emby') && (!detailData.episodes || detailData.episodes.length === 0)) {
+      // 这类源统一先走详情懒加载
+      if (isLazyDetailSource(detailData?.source)) {
         return;
       }
       setVideoUrl('');
@@ -3380,9 +3390,9 @@ function PlayPageClient() {
         if (target) {
           detailData = target;
 
-          // 如果是 openlist 或 emby 源且 episodes 为空，需要调用 detail 接口获取完整信息
-          if ((detailData.source === 'openlist' || detailData.source === 'emby' || detailData.source.startsWith('emby_')) && (!detailData.episodes || detailData.episodes.length === 0)) {
-            console.log('[Play] OpenList/Emby source has no episodes, fetching detail...');
+          // 这类源统一通过详情接口补全播放数据
+          if (isLazyDetailSource(detailData.source)) {
+            console.log('[Play] Fetching lazy detail for selected source...');
             // currentSource 已经是完整格式
             const detailSources = await fetchSourceDetail(currentSource, currentId, searchTitle || videoTitle);
             if (detailSources.length > 0) {
@@ -3415,6 +3425,9 @@ function PlayPageClient() {
           // 检查是否为 xiaoya 源
           if (s.source === 'xiaoya') return false;
 
+          // 脚本源详情懒加载，不参与测速
+          if (s.source.startsWith('script:')) return false;
+
           return true;
         });
 
@@ -3422,13 +3435,14 @@ function PlayPageClient() {
           s.source === 'openlist' ||
           s.source === 'emby' ||
           s.source.startsWith('emby_') ||
-          s.source === 'xiaoya'
+          s.source === 'xiaoya' ||
+          s.source.startsWith('script:')
         );
 
         if (sourcesToTest.length > 0) {
           detailData = await preferBestSource(sourcesToTest);
         } else if (excludedSources.length > 0) {
-          // 如果只有 openlist/emby/xiaoya 源，直接使用第一个
+          // 如果只有懒加载详情的源，直接使用第一个
           detailData = excludedSources[0];
         } else {
           detailData = sourcesInfo[0];
@@ -3437,9 +3451,9 @@ function PlayPageClient() {
 
       console.log(detailData.source, detailData.id);
 
-      // 如果是 openlist 或 emby 源且 episodes 为空，需要调用 detail 接口获取完整信息
-      if ((detailData.source === 'openlist' || detailData.source === 'emby') && (!detailData.episodes || detailData.episodes.length === 0)) {
-        console.log('[Play] OpenList/Emby source has no episodes after selection, fetching detail...');
+      // 这类源统一通过详情接口补全播放数据
+      if (isLazyDetailSource(detailData.source)) {
+        console.log('[Play] Fetching lazy detail after source selection...');
         const detailSources = await fetchSourceDetail(detailData.source, detailData.id, detailData.title || videoTitleRef.current);
         if (detailSources.length > 0) {
           detailData = detailSources[0];
@@ -3754,8 +3768,8 @@ function PlayPageClient() {
         return;
       }
 
-      // 如果是 openlist 或 emby 源且 episodes 为空，需要调用 detail 接口获取完整信息
-      if ((newDetail.source === 'openlist' || newDetail.source === 'emby' || newDetail.source.startsWith('emby_')) && (!newDetail.episodes || newDetail.episodes.length === 0)) {
+      // 这类源统一通过详情接口补全播放数据
+      if (isLazyDetailSource(newDetail.source)) {
         try {
           const detailResponse = await fetch(`/api/source-detail?source=${newSource}&id=${newId}&title=${encodeURIComponent(newTitle)}`);
           if (detailResponse.ok) {
@@ -3765,10 +3779,10 @@ function PlayPageClient() {
             }
             newDetail = detailData;
           } else {
-            throw new Error('获取 openlist 详情失败');
+            throw new Error('获取视频详情失败');
           }
         } catch (err) {
-          console.error('获取 openlist 详情失败:', err);
+          console.error('获取视频详情失败:', err);
           setIsVideoLoading(false);
           setError('获取视频详情失败，请重试');
           return;
@@ -5063,8 +5077,8 @@ function PlayPageClient() {
       return;
     }
 
-    // openlist 和 emby 源的剧集是懒加载的，如果 episodes 为空则跳过检查
-    if ((currentSource === 'openlist' || currentSource === 'emby' || detail?.source === 'openlist' || detail?.source === 'emby') && (!detail || !detail.episodes || detail.episodes.length === 0)) {
+    // 这类源会先异步补全详情，这里先跳过
+    if (isLazyDetailSource(currentSource || detail?.source)) {
       return;
     }
 
